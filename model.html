@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Model Viewer</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.130.1/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.130.1/examples/js/loaders/GLTFLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.130.1/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+        }
+        #container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        canvas {
+            display: block;
+        }
+        img {
+            max-width: 50%;
+            max-height: 50%;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <img id="thumbnail" alt="3D Model Thumbnail" />
+    </div>
+
+    <script>
+        function getModelIdFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('modelId');
+        }
+
+        const modelId = getModelIdFromUrl();
+        if (!modelId) {
+            console.error("Model ID is missing in the URL.");
+        }
+
+        const thumbnail = document.getElementById("thumbnail");
+        const container = document.getElementById("container");
+
+        thumbnail.src = `http://127.0.0.1:8081/${modelId}.png`;
+
+        thumbnail.addEventListener("click", () => {
+            const referrer = document.referrer;
+            fetch("https://your-server.com/track-click", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ modelId, referrer }),
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error("Failed to notify the server about the click.");
+                }
+                console.log("Click reported to the server.");
+            })
+            .catch(error => console.error("Error:", error));
+
+            container.innerHTML = ""; 
+
+            const canvas = document.createElement("canvas");
+            container.appendChild(canvas);
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer({ canvas });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0xffffff); // Set background to white
+            window.addEventListener("resize", () => {
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+            });
+
+            camera.position.set(0, 1, 5);
+
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.6);
+            directionalLight.position.set(5, 10, 7.5);
+            scene.add(directionalLight);
+
+            // Add OrbitControls to allow rotating the model
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true; // Smooth motion
+            controls.dampingFactor = 0.05;
+            controls.enableZoom = true; // Allow zooming
+            controls.target.set(0, 1, 0); // Set center point for rotation
+
+            const loader = new THREE.GLTFLoader();
+            loader.load(`http://127.0.0.1:8081/${modelId}.gltf`, function (gltf) {
+                gltf.scene.position.set(0, 0, 0); // Keep the model centered
+                scene.add(gltf.scene);
+                animate();
+            }, undefined, function (error) {
+                console.error("Error loading the model:", error);
+            });
+
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update(); // Required for damping to work
+                renderer.render(scene, camera);
+            }
+        });
+    </script>
+</body>
+</html>
